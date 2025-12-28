@@ -1,7 +1,7 @@
 "use client";
 
 import { StatsCard } from "@/components/dashboard/StatsCard";
-import { RecentBookings, RecentBookingRow } from "@/components/dashboard/RecentBookings";
+import { RecentBookings, ActivityRow } from "@/components/dashboard/RecentBookings";
 import { OccupancyChart } from "@/components/dashboard/OccupancyChart";
 import {
     Users,
@@ -16,8 +16,8 @@ import { useEffect, useMemo, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { supabase } from "@/lib/supabase/client";
 import Link from "next/link";
-import { addDays, format, isSameDay, isWithinInterval, startOfDay, subDays } from "date-fns";
-import { Booking, Property, Room, UserProfile } from "../types";
+import { addDays, format, isSameDay, isWithinInterval, startOfDay, subDays, formatDistanceToNow } from "date-fns";
+import { Booking, Property, Room, UserProfile, BookingLog } from "../types";
 
 type DashboardBooking = Booking & {
     total?: number | null;
@@ -57,6 +57,7 @@ export default function DashboardPage() {
     const [properties, setProperties] = useState<Property[]>([]);
     const [bookings, setBookings] = useState<DashboardBooking[]>([]);
     const [rooms, setRooms] = useState<Room[]>([]);
+    const [activityLogs, setActivityLogs] = useState<BookingLog[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     // Approval disabled; any signed-in user can use the dashboard
@@ -124,7 +125,7 @@ export default function DashboardPage() {
             const sinceDate = subDays(startOfDay(new Date()), 60)
                 .toISOString()
                 .split("T")[0];
-            const [propertiesRes, roomsRes, bookingsRes] = await Promise.all([
+            const [propertiesRes, roomsRes, bookingsRes, logsRes] = await Promise.all([
                 supabase.from("properties").select("*").order("name"),
                 supabase.from("rooms").select("id, property_id, number, category_id, status, floor"),
                 supabase
@@ -132,6 +133,15 @@ export default function DashboardPage() {
                     .select("id, property_id, room_id, guest_name, guest_email, status, total, check_in, check_out, reference_code, created_at, created_by, created_by_user:user_profiles(display_name)")
                     .gte("check_in", sinceDate)
                     .order("created_at", { ascending: false }),
+                supabase
+                    .from("booking_logs")
+                    .select(`
+                        *,
+                        performed_by_user:user_profiles(display_name),
+                        property:properties(name)
+                    `)
+                    .order("performed_at", { ascending: false })
+                    .limit(20),
             ]);
 
             if (propertiesRes.error || roomsRes.error || bookingsRes.error) {
@@ -139,6 +149,7 @@ export default function DashboardPage() {
                     propertiesRes.error?.message ??
                     roomsRes.error?.message ??
                     bookingsRes.error?.message ??
+                    // logsRes.error?.message ?? // Ignore logs error for now to not break dashboard
                     "Unable to load dashboard data.",
                 );
             } else {
@@ -150,6 +161,9 @@ export default function DashboardPage() {
                     created_by_name: booking.created_by_user?.display_name || null,
                 }));
                 setBookings(bookingsWithCreator as DashboardBooking[]);
+
+                // Handle logs
+                setActivityLogs((logsRes?.data as any) ?? []);
                 setError(null);
             }
             setLoading(false);
@@ -245,23 +259,29 @@ export default function DashboardPage() {
         });
     }, [activeBookings]);
 
-    const recentBookingRows = useMemo<RecentBookingRow[]>(() => {
-        const roomMap = new Map(rooms.map((room) => [room.id, room.number]));
-        return activeBookings.slice(0, 6).map((booking) => ({
-            id: booking.id,
-            guest:
-                (booking.adults ?? 1) > 1
-                    ? `${booking.guest_name} +${(booking.adults ?? 1) - 1}`
-                    : booking.guest_name,
-            email: booking.guest_email,
-            room: booking.room_id
-                ? `Room ${roomMap.get(booking.room_id) ?? "?"}`
-                : "Unassigned",
-            status: booking.status.replace("_", " "),
-            amountLabel: currencyFormatter.format(Number(booking.total ?? 0)),
-            stayLabel: `${format(new Date(booking.check_in), "MMM d")} – ${format(addDays(new Date(booking.check_out), -1), "MMM d")}`,
-        }));
-    }, [activeBookings, rooms]);
+    const recentActivityRows = useMemo<ActivityRow[]>(() => {
+        return activityLogs.map((log) => {
+            const guestName = log.details?.guest_name || "Unknown Guest";
+            const roomNum = log.details?.room_number ? `Room ${log.details.room_number}` : "Unassigned";
+
+            let dateRange = "";
+            if (log.details?.check_in && log.details?.check_out) {
+                const checkIn = format(new Date(log.details.check_in), "MMM d, yyyy");
+                const checkOut = format(new Date(log.details.check_out), "MMM d, yyyy");
+                dateRange = `${checkIn} – ${checkOut}`;
+            }
+
+            return {
+                id: log.id,
+                user: log.performed_by_user?.display_name || "Unknown User",
+                action: log.action,
+                details: `${guestName} • ${roomNum}`,
+                property: log.property?.name || "Unknown Property",
+                time: formatDistanceToNow(new Date(log.performed_at), { addSuffix: true }),
+                dates: dateRange,
+            };
+        });
+    }, [activityLogs]);
 
     if (profileLoading) {
         return (
@@ -395,7 +415,7 @@ export default function DashboardPage() {
                     <OccupancyChart data={occupancyData} loading={loading} totalRooms={rooms.length} />
                 </div>
                 <div className="col-span-3">
-                    <RecentBookings rows={recentBookingRows} loading={loading} />
+                    <RecentBookings rows={recentActivityRows} loading={loading} />
                 </div>
             </div>
         </div>

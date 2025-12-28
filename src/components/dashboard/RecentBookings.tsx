@@ -1,16 +1,19 @@
 
-export type RecentBookingRow = {
+import { formatDistanceToNow } from "date-fns";
+import { BookingLog } from "@/app/types";
+
+export type ActivityRow = {
     id: string;
-    guest: string;
-    email?: string | null;
-    room: string;
-    status: string;
-    amountLabel: string;
-    stayLabel: string;
+    user: string;
+    action: "create" | "delete" | "update";
+    details: string;
+    property: string;
+    time: string;
+    dates: string;
 };
 
 type RecentBookingsProps = {
-    rows: RecentBookingRow[];
+    rows: ActivityRow[];
     loading?: boolean;
 };
 
@@ -18,65 +21,71 @@ export function RecentBookings({ rows, loading = false }: RecentBookingsProps) {
     const hasRows = rows.length > 0;
 
     return (
-        <div className="glass-card rounded-xl">
-            <div className="p-6">
+        <div className="glass-card rounded-xl h-full flex flex-col">
+            <div className="p-6 pb-2">
                 <h3 className="font-semibold leading-none tracking-tight">
-                    Recent Bookings
+                    Recent Activity
                 </h3>
-                <p className="text-sm text-muted-foreground">
-                    Most recently created bookings.
+                <p className="text-sm text-muted-foreground mt-1">
+                    Latest booking actions.
                 </p>
             </div>
             {loading ? (
-                <div className="p-6 text-sm text-muted-foreground">Loading bookings...</div>
+                <div className="p-6 text-sm text-muted-foreground">Loading activity...</div>
             ) : hasRows ? (
-                <div className="p-0">
-                    <div className="relative w-full overflow-auto">
+                <div className="flex-1 overflow-auto">
+                    <div className="relative w-full">
                         <table className="w-full caption-bottom text-sm">
-                            <thead className="[&_tr]:border-b">
+                            <thead className="[&_tr]:border-b sticky top-0 bg-white z-10">
                                 <tr className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted">
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                                        Guest
+                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground w-[100px]">
+                                        User
                                     </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                                        Stay
+                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground w-[80px]">
+                                        Action
                                     </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                                        Room
+                                    <th className="h-10 px-4 text-left align-middle font-medium text-muted-foreground">
+                                        Details
                                     </th>
-                                    <th className="h-12 px-4 text-left align-middle font-medium text-muted-foreground">
-                                        Status
-                                    </th>
-                                    <th className="h-12 px-4 text-right align-middle font-medium text-muted-foreground">
-                                        Amount
+                                    <th className="h-10 px-4 text-right align-middle font-medium text-muted-foreground w-[100px]">
+                                        Time
                                     </th>
                                 </tr>
                             </thead>
                             <tbody className="[&_tr:last-child]:border-0">
-                                {rows.map((booking) => (
+                                {rows.map((row) => (
                                     <tr
-                                        key={booking.id}
+                                        key={row.id}
                                         className="border-b transition-colors hover:bg-muted/50 data-[state=selected]:bg-muted"
                                     >
+                                        <td className="p-4 align-middle font-medium">
+                                            {row.user}
+                                        </td>
+                                        <td className="p-4 align-middle">
+                                            <span
+                                                className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 ${row.action === "create"
+                                                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                                    : row.action === "delete"
+                                                        ? "border-rose-200 bg-rose-50 text-rose-700"
+                                                        : "border-slate-200 bg-slate-50 text-slate-700"
+                                                    }`}
+                                            >
+                                                {row.action === "create" ? "Added" : row.action === "delete" ? "Deleted" : "Updated"}
+                                            </span>
+                                        </td>
                                         <td className="p-4 align-middle">
                                             <div className="flex flex-col">
-                                                <span className="font-medium">{booking.guest}</span>
-                                                <span className="text-xs text-muted-foreground">
-                                                    {booking.email || "No email"}
+                                                <span className="text-slate-900 font-medium">{row.details}</span>
+                                                <span className="text-xs text-slate-500">
+                                                    {row.dates}
+                                                </span>
+                                                <span className="text-[10px] text-slate-400 mt-0.5">
+                                                    {row.property}
                                                 </span>
                                             </div>
                                         </td>
-                                        <td className="p-4 align-middle text-sm text-muted-foreground">
-                                            {booking.stayLabel}
-                                        </td>
-                                        <td className="p-4 align-middle">{booking.room}</td>
-                                        <td className="p-4 align-middle">
-                                            <span className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80">
-                                                {booking.status}
-                                            </span>
-                                        </td>
-                                        <td className="p-4 align-middle text-right">
-                                            {booking.amountLabel}
+                                        <td className="p-4 align-middle text-right text-muted-foreground text-xs whitespace-nowrap">
+                                            {row.time}
                                         </td>
                                     </tr>
                                 ))}
@@ -86,7 +95,7 @@ export function RecentBookings({ rows, loading = false }: RecentBookingsProps) {
                 </div>
             ) : (
                 <div className="p-6 text-sm text-muted-foreground">
-                    No bookings yet. Create a booking to see it here.
+                    No recent activity recorded.
                 </div>
             )}
         </div>

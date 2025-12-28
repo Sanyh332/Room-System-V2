@@ -116,3 +116,25 @@ export const bookingStatuses = [
     { value: "checked_out", label: "Checked out" },
     { value: "cancelled", label: "Cancelled" },
 ];
+
+export type BookingLog = {
+    id: string;
+    booking_id: string | null;
+    property_id: string;
+    action: "create" | "delete" | "update";
+    performed_by: string | null;
+    performed_at: string;
+    details: {
+        guest_name: string;
+        room_number?: string;
+        check_in?: string;
+        check_out?: string;
+        amount?: number;
+    };
+    performed_by_user?: {
+        display_name: string;
+    } | null;
+    property?: {
+        name: string;
+    } | null;
+};
