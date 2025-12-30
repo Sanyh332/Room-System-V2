@@ -141,7 +141,7 @@ export default function DashboardPage() {
                         property:properties(name)
                     `)
                     .order("performed_at", { ascending: false })
-                    .limit(20),
+                    .limit(5),
             ]);
 
             if (propertiesRes.error || roomsRes.error || bookingsRes.error) {
