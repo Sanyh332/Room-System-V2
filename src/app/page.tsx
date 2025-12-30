@@ -947,6 +947,24 @@ export function Dashboard({ view = "all" }: { view?: DashboardView }) {
   };
 
   const deleteProperty = async (id: string) => {
+    // Check for active bookings
+    const { data: activeBookings, error: checkError } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("property_id", id)
+      .in("status", ["tentative", "reserved", "checked_in"])
+      .limit(1);
+
+    if (checkError) {
+      setError(checkError.message);
+      return;
+    }
+
+    if (activeBookings && activeBookings.length > 0) {
+      setError("Cannot delete property with active bookings. Please cancel or complete them first.");
+      return;
+    }
+
     const { error } = await supabase.from("properties").delete().eq("id", id);
     if (error) {
       setError(error.message);
@@ -997,6 +1015,37 @@ export function Dashboard({ view = "all" }: { view?: DashboardView }) {
   };
 
   const deleteCategory = async (id: string) => {
+    // Check for active bookings in rooms of this category
+    const { data: roomsInCat, error: roomError } = await supabase
+      .from("rooms")
+      .select("id")
+      .eq("category_id", id);
+
+    if (roomError) {
+      setError(roomError.message);
+      return;
+    }
+
+    if (roomsInCat && roomsInCat.length > 0) {
+      const roomIds = roomsInCat.map(r => r.id);
+      const { data: activeBookings, error: checkError } = await supabase
+        .from("bookings")
+        .select("id")
+        .in("room_id", roomIds)
+        .in("status", ["tentative", "reserved", "checked_in"])
+        .limit(1);
+
+      if (checkError) {
+        setError(checkError.message);
+        return;
+      }
+
+      if (activeBookings && activeBookings.length > 0) {
+        setError("Cannot delete category. Some rooms in this category have active bookings.");
+        return;
+      }
+    }
+
     const { error } = await supabase.from("room_categories").delete().eq("id", id);
     if (error) {
       setError(error.message);
@@ -1039,6 +1088,24 @@ export function Dashboard({ view = "all" }: { view?: DashboardView }) {
   };
 
   const deleteRoom = async (id: string) => {
+    // Check for active bookings
+    const { data: activeBookings, error: checkError } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("room_id", id)
+      .in("status", ["tentative", "reserved", "checked_in"])
+      .limit(1);
+
+    if (checkError) {
+      setError(checkError.message);
+      return;
+    }
+
+    if (activeBookings && activeBookings.length > 0) {
+      setError("Cannot delete room with active bookings. Please cancel or complete them first.");
+      return;
+    }
+
     const { error } = await supabase.from("rooms").delete().eq("id", id);
     if (error) {
       setError(error.message);
@@ -1201,23 +1268,8 @@ export function Dashboard({ view = "all" }: { view?: DashboardView }) {
       setMessage(`${roomIds.length} booking${roomIds.length !== 1 ? "s" : ""} created for room${roomIds.length !== 1 ? "s" : ""} ${roomNumbers}`);
     }
 
-    if (roomIds.length === 1 && roomIds[0] === null) {
-      setMessage("Booking created");
-    } else {
-      const roomNumbers = roomIds
-        .map(id => rooms.find(r => r.id === id)?.number)
-        .filter(Boolean)
-        .join(", ");
-      setMessage(`${roomIds.length} booking${roomIds.length !== 1 ? "s" : ""} created for room${roomIds.length !== 1 ? "s" : ""} ${roomNumbers}`);
-    }
-
     // Log the creation
     try {
-      // We need the IDs of the created bookings. 
-      // Since we didn't select them back, we can construct the log entry with best-effort details.
-      // Or better, we should have selected them back. 
-      // For now, let's just log the intent.
-
       const logPayloads = roomIds.map(roomId => {
         const roomNumber = rooms.find(r => r.id === roomId)?.number || "Unassigned";
         return {
@@ -1267,15 +1319,6 @@ export function Dashboard({ view = "all" }: { view?: DashboardView }) {
     // Log deletion
     if (bookingToDelete) {
       try {
-        // Find room number if possible
-        // We might not have the room list if we are on "All" view, but usually we do if we are deleting.
-        // Actually `rooms` state might be empty if we are in "All" view? 
-        // But `bookingToDelete` has `room_id`.
-        // Let's try to find it in `rooms` or just log the ID.
-        // The `bookings` object doesn't have room number directly, but we can try.
-        // Wait, `bookings` state has `room_id`.
-
-        // If we are in property context, `rooms` should be populated.
         const roomNumber = rooms.find(r => r.id === bookingToDelete.room_id)?.number || "Unknown";
 
         await supabase.from("booking_logs").insert([{
